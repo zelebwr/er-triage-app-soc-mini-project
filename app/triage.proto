@@ -33,6 +33,7 @@ message VitalsAlert {
   string patient_id = 1;
   string alert_level = 2;
   string message = 3;
+  int32 bpm = 4;
 }
 
 message DashboardRequest {
