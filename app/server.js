@@ -96,71 +96,75 @@ const grpcServer = new grpc.Server();
 grpcServer.addService(triageProto.AdmissionService.service, { RegisterPatient: registerPatient });
 grpcServer.addService(triageProto.VitalsService.service, { MonitorVitals: monitorVitals });
 grpcServer.addService(triageProto.DashboardService.service, { StreamQueue: streamQueue });
-grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
-    console.log("gRPC listening on 0.0.0.0:50051");
-});
 
-// HTTP & WebSocket gateway
+// HTTP & WebSocket gateway setup (but don't start until gRPC is ready)
 const app = express();
 app.use(express.static('public'));
 const httpServer = http.createServer(app);
 const wss = new WebSocket.Server({ server: httpServer });
 
-const localAdmissionClient = new triageProto.AdmissionService('localhost:50051', grpc.credentials.createInsecure());
-const localVitalsClient = new triageProto.VitalsService('localhost:50051', grpc.credentials.createInsecure());
-const localDashboardClient = new triageProto.DashboardService('localhost:50051', grpc.credentials.createInsecure());
+// Initialize gRPC clients and HTTP server only after gRPC server is bound
+grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
+    console.log("gRPC listening on 0.0.0.0:50051");
+    
+    // Now create gRPC clients (server is ready)
+    const localAdmissionClient = new triageProto.AdmissionService('localhost:50051', grpc.credentials.createInsecure());
+    const localVitalsClient = new triageProto.VitalsService('localhost:50051', grpc.credentials.createInsecure());
+    const localDashboardClient = new triageProto.DashboardService('localhost:50051', grpc.credentials.createInsecure());
 
-const vitalsStream = localVitalsClient.MonitorVitals();
-vitalsStream.on('data', (alert) => {
-    wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
-        client.send(JSON.stringify({ type: 'VITALS_ALERT', data: alert })));
-});
-
-const dashboardStream = localDashboardClient.StreamQueue({ client_id: 'WS_GATEWAY' });
-dashboardStream.on('data', (queueUpdate) => {
-    wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
-        client.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: JSON.parse(queueUpdate.raw_html_queue) })));
-});
-
-wss.on('connection', (ws) => {
-    ws.on('message', (message) => {
-        const parsedMsg = JSON.parse(message);
-        if (parsedMsg.action === 'REGISTER') {
-            localAdmissionClient.RegisterPatient(parsedMsg.payload, (err, response) => {
-                if (err) return ws.send(JSON.stringify({ type: 'ERROR', data: err.details }));
-                ws.send(JSON.stringify({ type: 'REGISTER_SUCCESS', data: response }));
-            });
-        } else if (parsedMsg.action === 'TRANSMIT_VITALS') {
-            vitalsStream.write(parsedMsg.payload);
-        } else if (parsedMsg.action === 'FETCH_QUEUE') {
-            // Send complete queue data with BPM and priority sync
-            const queueWithBpm = triageQueue.map(p => ({
-                ...p,
-                bpm: p.bpm || 0,
-                priority: criticalPatients.has(p.id) ? 'CRITICAL' : p.priority
-            }));
-            ws.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: queueWithBpm }));
-            
-            // Send all active critical alerts with small delay
-            setTimeout(() => {
-                criticalPatients.forEach((alert, patientId) => {
-                    ws.send(JSON.stringify({
-                        type: 'VITALS_ALERT',
-                        data: {
-                            patient_id: patientId,
-                            alert_level: alert.alert_level,
-                            message: alert.message,
-                            bpm: alert.bpm
-                        }
-                    }));
-                });
-            }, 100);
-        }
+    const vitalsStream = localVitalsClient.MonitorVitals();
+    vitalsStream.on('data', (alert) => {
+        wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
+            client.send(JSON.stringify({ type: 'VITALS_ALERT', data: alert })));
     });
-});
 
-httpServer.listen(8080, '0.0.0.0', () => {
-    console.log("WebSocket gateway on http://0.0.0.0:8080");
+    const dashboardStream = localDashboardClient.StreamQueue({ client_id: 'WS_GATEWAY' });
+    dashboardStream.on('data', (queueUpdate) => {
+        wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
+            client.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: JSON.parse(queueUpdate.raw_html_queue) })));
+    });
+
+    wss.on('connection', (ws) => {
+        ws.on('message', (message) => {
+            const parsedMsg = JSON.parse(message);
+            if (parsedMsg.action === 'REGISTER') {
+                localAdmissionClient.RegisterPatient(parsedMsg.payload, (err, response) => {
+                    if (err) return ws.send(JSON.stringify({ type: 'ERROR', data: err.details }));
+                    ws.send(JSON.stringify({ type: 'REGISTER_SUCCESS', data: response }));
+                });
+            } else if (parsedMsg.action === 'TRANSMIT_VITALS') {
+                vitalsStream.write(parsedMsg.payload);
+            } else if (parsedMsg.action === 'FETCH_QUEUE') {
+                // Send complete queue data with BPM and priority sync
+                const queueWithBpm = triageQueue.map(p => ({
+                    ...p,
+                    bpm: p.bpm || 0,
+                    priority: criticalPatients.has(p.id) ? 'CRITICAL' : p.priority
+                }));
+                ws.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: queueWithBpm }));
+                
+                // Send all active critical alerts with small delay
+                setTimeout(() => {
+                    criticalPatients.forEach((alert, patientId) => {
+                        ws.send(JSON.stringify({
+                            type: 'VITALS_ALERT',
+                            data: {
+                                patient_id: patientId,
+                                alert_level: alert.alert_level,
+                                message: alert.message,
+                                bpm: alert.bpm
+                            }
+                        }));
+                    });
+                }, 100);
+            }
+        });
+    });
+
+    // Start HTTP server after gRPC is ready
+    httpServer.listen(8080, '0.0.0.0', () => {
+        console.log("WebSocket gateway on http://0.0.0.0:8080");
+    });
 });
 
 module.exports = { grpcServer, triageQueue, patientsState };
