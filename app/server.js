@@ -47,6 +47,7 @@ function registerPatient(call, callback) {
     triageQueue.push(patientsState.get(patientId));
     broadcastQueueUpdate();
     callback(null, { patient_id: patientId, status: "Admitted" });
+}
 
 function monitorVitals(call) {
     call.on('data', (vitalsRequest) => {
