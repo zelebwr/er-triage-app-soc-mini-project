@@ -5,6 +5,7 @@ const { exec } = require('child_process');
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+const { log } = require('console');
 
 // Load proto
 const packageDefinition = protoLoader.loadSync('triage.proto', {
@@ -20,6 +21,10 @@ const triageProto = grpc.loadPackageDefinition(packageDefinition).triage;
 const patientsState = new Map();
 let triageQueue = [];
 const dashboardStreams = new Set();
+
+function createPatientId() {
+    return `P-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
+}
 
 function broadcastQueueUpdate() {
     const htmlPayload = JSON.stringify(triageQueue);
@@ -42,7 +47,7 @@ function registerPatient(call, callback) {
         if (error) console.error("Exec error:", error);
     });
     // =================================
-    const patientId = 'P-' + crypto.randomBytes(2).toString('hex').toUpperCase();
+    const patientId = createPatientId();
     patientsState.set(patientId, { id: patientId, name, age, complaint, priority: 'Normal', bpm: 0 });
     triageQueue.push(patientsState.get(patientId));
     broadcastQueueUpdate();
@@ -61,13 +66,14 @@ function monitorVitals(call) {
         
         if (bpm < 50 || bpm > 120) {
             patient.priority = 'CRITICAL';
+            log(`Critical alert for patient ${patient_id}: BPM ${bpm} = status: ${patient.priority}`);
             triageQueue = triageQueue.filter(p => p.id !== patient_id);
             triageQueue.unshift(patient);
             broadcastQueueUpdate();
             // Store critical alert for persistence
             const alertMsg = bpm < 50 
-                ? `⚠️ Tekanan Jantung Sangat Rendah: ${bpm} BPM`
-                : `🔴 Tekanan Jantung Tinggi: ${bpm} BPM`;
+                ? `Tekanan jantung sangat rendah: ${bpm} BPM`
+                : `Tekanan jantung tinggi: ${bpm} BPM`;
             criticalPatients.set(patient_id, {
                 bpm,
                 alert_level: 'RED',
@@ -77,9 +83,10 @@ function monitorVitals(call) {
             call.write({ patient_id, alert_level: 'RED', message: alertMsg, bpm });
         } else if (criticalPatients.has(patient_id)) {
             // Patient returned to normal - clear stored alert
+            log(`Patient ${patient_id} returned to normal BPM: ${bpm} BPM = status: ${patient.priority}`);
             patient.priority = 'Normal';
             criticalPatients.delete(patient_id);
-            const normalMsg = `✅ Tekanan Jantung Kembali Normal: ${bpm} BPM`;
+            const normalMsg = `Tekanan jantung kembali normal: ${bpm} BPM`;
             broadcastQueueUpdate();
             call.write({ patient_id, alert_level: 'GREEN', message: normalMsg, bpm });
         }

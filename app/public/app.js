@@ -1,4 +1,4 @@
-// ── State ──────────────────────────────────────────────────────────────
+// State
 let alertCount = 0;
 let totalPatients = 0;
 let queueData = []; // Store current queue for modal/suggestions
@@ -8,7 +8,7 @@ let itemsPerPage = 10;
 let searchQuery = '';
 let toastCounter = 0;
 
-// ── DOM Refs ───────────────────────────────────────────────────────────
+// DOM Refs
 const $ = (id) => document.getElementById(id);
 const wsStatus          = $('wsStatus');
 const queueTable        = $('queueTable');
@@ -34,14 +34,24 @@ const btnNextPage      = $('btnNextPage');
 const pageIndicator    = $('pageIndicator');
 const toastContainer   = $('toastContainer');
 
-// ── Clock ──────────────────────────────────────────────────────────────
+// Clock
 function updateClock() {
     clockEl.textContent = new Date().toLocaleTimeString('id-ID', { hour12: false });
 }
 setInterval(updateClock, 1000);
 updateClock();
 
-// ── Toast Notification System ───────────────────────────────────────────
+function icon(name, className = 'w-4 h-4') {
+    return `<i data-lucide="${name}" class="${className}"></i>`;
+}
+
+function refreshIcons() {
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+}
+
+// Toast Notification System
 function showToast(message, type = 'info', duration = 4000) {
     const id = `toast-${++toastCounter}`;
     const colors = {
@@ -50,18 +60,24 @@ function showToast(message, type = 'info', duration = 4000) {
         error:   'bg-critical-600',
         warning: 'bg-yellow-500'
     };
-    const icons = { info: 'ℹ️', success: '✅', error: '🚨', warning: '⚠️' };
+    const icons = {
+        info: icon('circle-help', 'w-4 h-4'),
+        success: icon('check-circle-2', 'w-4 h-4'),
+        error: icon('circle-alert', 'w-4 h-4'),
+        warning: icon('triangle-alert', 'w-4 h-4')
+    };
 
     const toast = document.createElement('div');
     toast.id = id;
     toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto flex items-start gap-3 transition-all duration-300 ease-out animate-[slideIn_0.3s_ease-out]`;
     toast.innerHTML = `
-        <span class="text-lg shrink-0">${icons[type] || 'ℹ️'}</span>
+        <span class="text-lg shrink-0">${icons[type] || icons.info}</span>
         <div class="flex-1 flex items-center gap-2">
             <p class="text-sm font-medium">${message}</p>
         </div>
     `;
     toastContainer.prepend(toast);
+    refreshIcons();
 
     setTimeout(() => {
         toast.classList.add('opacity-0', 'translate-x-full');
@@ -94,7 +110,7 @@ if (!document.getElementById('toast-animation-style')) {
     document.head.appendChild(style);
 }
 
-// ── Logging Helper ─────────────────────────────────────────────────────
+// Logging Helper
 function addLog(msg, level = 'info') {
     const li = document.createElement('li');
     const colors = {
@@ -103,33 +119,38 @@ function addLog(msg, level = 'info') {
         error:   'border-critical-400 bg-critical-50 text-critical-700',
         warning: 'border-yellow-400 bg-yellow-50 text-yellow-700',
     };
-    const icons = { info: 'ℹ️', success: '✅', error: '❌', warning: '⚠️' };
+    const icons = {
+        info: icon('info', 'w-4 h-4'),
+        success: icon('check-circle-2', 'w-4 h-4'),
+        error: icon('circle-x', 'w-4 h-4'),
+        warning: icon('triangle-alert', 'w-4 h-4')
+    };
     li.className = `py-1 px-2 border-l-2 rounded-r ${colors[level] || colors.info} flex items-start gap-1.5`;
     const time = new Date().toLocaleTimeString('id-ID', { hour12: false });
-    li.innerHTML = `<span class="opacity-60 shrink-0">${time}</span> <span>${icons[level] || ''} ${msg}</span>`;
+    li.innerHTML = `<span class="opacity-60 shrink-0">${time}</span> <span class="inline-flex items-center gap-1">${icons[level] || icons.info}<span>${msg}</span></span>`;
     logDom.prepend(li);
     // Keep max 50 entries
     while (logDom.children.length > 50) logDom.removeChild(logDom.lastChild);
 }
 
-// ── Priority Badge ─────────────────────────────────────────────────────
+// Priority Badge
 function priorityBadge(priority) {
     if (priority === 'CRITICAL') {
-        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-critical-100 text-critical-700 ring-1 ring-critical-500 animate-pulse">🔴 CRITICAL</span>`;
+        return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold bg-critical-100 text-critical-700 ring-1 ring-critical-500 animate-pulse">${icon('shield-alert', 'w-3.5 h-3.5')} CRITICAL</span>`;
     }
-    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-med-100 text-med-700 ring-1 ring-med-300">🟢 Normal</span>`;
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-med-100 text-med-700 ring-1 ring-med-300">${icon('badge-check', 'w-3.5 h-3.5')} Normal</span>`;
 }
 
-// ── BPM Badge ──────────────────────────────────────────────────────────
+// BPM Badge
 function bpmBadge(bpm) {
     const n = parseInt(bpm) || 0;
-    if (n === 0) return `<span class="text-slate-400">—</span>`;
+    if (n === 0) return `<span class="text-slate-400">-</span>`;
     let cls = 'bg-med-100 text-med-700'; // normal
     if (n < 50 || n > 120) cls = 'bg-critical-100 text-critical-700 font-bold';
     return `<span class="inline-block px-2 py-0.5 rounded-md text-xs ${cls}">${n} BPM</span>`;
 }
 
-// ── Render Queue Table (clickable rows, with pagination + search) ───────────────────────────────
+// Render Queue Table (clickable rows, with pagination + search)
 function renderQueue(data) {
     queueData = data || []; // Store for suggestions/modal
 
@@ -169,7 +190,7 @@ function renderQueue(data) {
             <tr><td colspan="7" class="px-3 py-10 text-center text-slate-400">
                 <div class="flex flex-col items-center gap-2">
                     <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
-                    ${searchQuery.trim() ? 'Tidak ada hasil pencarian' : 'Menunggu data antrian…'}
+                    ${searchQuery.trim() ? 'Tidak ada hasil pencarian' : 'Menunggu data antrian...'}
                 </div>
             </td></tr>`;
         patientSuggestions.classList.add('hidden');
@@ -183,8 +204,8 @@ function renderQueue(data) {
             <td class="px-3 py-2.5">${priorityBadge(p.priority)}</td>
             <td class="px-3 py-2.5 font-mono font-semibold text-primary-700 text-xs">${escapeHtml(p.id)}</td>
             <td class="px-3 py-2.5 font-medium">${escapeHtml(p.name)}</td>
-            <td class="px-3 py-2.5 hidden sm:table-cell text-slate-500">${p.age || '—'}</td>
-            <td class="px-3 py-2.5 hidden md:table-cell text-slate-500 text-xs max-w-[180px] truncate">${escapeHtml(p.complaint || '—')}</td>
+            <td class="px-3 py-2.5 hidden sm:table-cell text-slate-500">${p.age || '-'}</td>
+            <td class="px-3 py-2.5 hidden md:table-cell text-slate-500 text-xs max-w-[180px] truncate">${escapeHtml(p.complaint || '-')}</td>
             <td class="px-3 py-2.5">${bpmBadge(p.bpm)}</td>
         </tr>
     `).join('');
@@ -196,9 +217,10 @@ function renderQueue(data) {
     document.querySelectorAll('#queueTable tr[data-patient-id]').forEach(row => {
         row.addEventListener('click', () => openPatientModal(row.dataset.patientId));
     });
+    refreshIcons();
 }
 
-// ── Stats Update ───────────────────────────────────────────────────────
+// Stats Update
 function updateStats(data) {
     const count = data ? data.length : 0;
     const criticals = data ? data.filter(p => p.priority === 'CRITICAL').length : 0;
@@ -209,7 +231,7 @@ function updateStats(data) {
     queueCount.textContent   = count;
 }
 
-// ── Patient ID Suggestions ──────────────────────────────────────────────
+// Patient ID Suggestions
 function updateSuggestions() {
     if (!queueData || queueData.length === 0) {
         patientSuggestions.classList.add('hidden');
@@ -229,19 +251,19 @@ function selectPatientId(id) {
     $('vBpm').focus();
 }
 
-// ── Patient Detail Modal ─────────────────────────────────────────────────
+// Patient Detail Modal
 function openPatientModal(patientId) {
     const patient = queueData.find(p => p.id === patientId);
     if (!patient) return;
-
-    const isCritical = patient.priority === 'CRITICAL';
+    
+    const isCritical = patient.priority === 'CRITICAL'; 
     modalHeader.className = `px-6 py-4 flex items-center justify-between ${isCritical ? 'bg-critical-600' : 'bg-primary-600'}`;
 
     modalBody.innerHTML = `
         <div class="space-y-4">
             <div class="flex items-center gap-4">
                 <div class="w-20 h-20 rounded-xl ${isCritical ? 'bg-critical-100' : 'bg-primary-100'} flex items-center justify-center text-4xl">
-                    ${isCritical ? '🚨' : '👤'}
+                    ${isCritical ? icon('shield-alert', 'w-10 h-10 text-critical-600') : icon('user-round', 'w-10 h-10 text-primary-600')}
                 </div>
                 <div>
                     <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Patient ID</p>
@@ -257,39 +279,40 @@ function openPatientModal(patientId) {
                 </div>
                 <div class="bg-slate-50 rounded-lg p-3">
                     <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Usia</p>
-                    <p class="font-medium text-slate-800 mt-0.5">${patient.age || '—'} tahun</p>
+                    <p class="font-medium text-slate-800 mt-0.5">${patient.age || '-'} tahun</p>
                 </div>
             </div>
             <div class="bg-slate-50 rounded-lg p-3">
                 <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Keluhan Utama</p>
-                <p class="font-medium text-slate-800 mt-0.5">${escapeHtml(patient.complaint || '—')}</p>
+                <p class="font-medium text-slate-800 mt-0.5">${escapeHtml(patient.complaint || '-')}</p>
             </div>
             <div class="bg-slate-50 rounded-lg p-3">
                 <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Vitals Terkini</p>
                 <div class="flex items-center gap-3 mt-0.5">
                     ${bpmBadge(patient.bpm)}
                     <span class="text-xs text-slate-500">
-                        ${patient.bpm < 50 ? '💔 Bradikardia' : patient.bpm > 120 ? '❤️ Takikardia' : patient.bpm > 0 ? '💓 Normal' : '— Belum ada data'}
+                        ${patient.bpm < 50 ? `${icon('heart-crack', 'w-3.5 h-3.5')} Bradikardia` : patient.bpm > 120 ? `${icon('heart-pulse', 'w-3.5 h-3.5')} Takikardia` : patient.bpm > 0 ? `${icon('heart-pulse', 'w-3.5 h-3.5')} Normal` : '- Belum ada data'}
                     </span>
                 </div>
             </div>
             ${isCritical ? `
             <div class="bg-critical-50 border border-critical-200 rounded-lg p-3 flex items-center gap-2">
-                <span class="text-xl">⚠️</span>
-                <p class="text-sm text-critical-800 font-medium">Pasien dalam kondisi kritis — perlu tindakan segera</p>
+                ${icon('triangle-alert', 'w-5 h-5 text-critical-700 shrink-0')}
+                <p class="text-sm text-critical-800 font-medium">Pasien dalam kondisi kritis - perlu tindakan segera</p>
             </div>
             ` : ''}
         </div>
     `;
 
     patientModal.style.display = 'flex';
+    refreshIcons();
 }
 
 function closeModal() {
     patientModal.style.display = 'none';
 }
 
-// ── HTML Escape ────────────────────────────────────────────────────────
+// HTML Escape
 function escapeHtml(str) {
     if (!str) return '';
     const div = document.createElement('div');
@@ -297,7 +320,7 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
-// ── Update BPM in UI ─────────────────────────────────────────────────
+// Update BPM in UI
 function updatePatientBpm(patientId, bpm) {
     // Update queueData model
     const p = queueData.find(x => x.id === patientId);
@@ -321,9 +344,10 @@ function updatePatientBpm(patientId, bpm) {
             openPatientModal(patientId);
         }
     }
+    refreshIcons();
 }
 
-// ── WebSocket Connection ───────────────────────────────────────────────
+// WebSocket Connection
 const ws = new WebSocket('ws://' + window.location.host);
 
 ws.addEventListener('open', () => {
@@ -338,7 +362,7 @@ ws.addEventListener('open', () => {
     alertDom.innerHTML = `
         <div class="flex items-center justify-center py-8 text-slate-400">
             <div class="flex flex-col items-center gap-2">
-                <span class="text-3xl">✅</span>
+                ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
                 <span class="text-sm">Tidak ada alert aktif</span>
             </div>
         </div>`;
@@ -387,7 +411,7 @@ ws.addEventListener('message', (event) => {
             }
             criticalAlerts.delete(p.id);
             showToast(`Pasien ${p.id} vitals kembali normal (${p.bpm} BPM)`, 'success');
-            addLog(`✅ Pasien ${p.id} vitals kembali normal (${p.bpm} BPM)`, 'success');
+            addLog(`Pasien ${p.id} vitals kembali normal (${p.bpm} BPM)`, 'success');
         });
 
         // NOTIFIKASI ALERT YANG DIV
@@ -406,11 +430,11 @@ ws.addEventListener('message', (event) => {
                 el.className = 'flex items-start gap-2 p-3 rounded-lg bg-critical-50 border border-critical-200 text-critical-800 text-sm animate-pulse';
                 el.dataset.patientId = p.id;
                 el.innerHTML = `
-                    <span class="text-lg shrink-0">🚨</span>
+                    ${icon('shield-alert', 'w-5 h-5 shrink-0 text-critical-700 mt-0.5')}
                     <div class="flex-1">
                         <div class="flex items-center justify-between gap-2">
                             <div>
-                                <p class="font-bold">CRITICAL — ${escapeHtml(p.id)}</p>
+                                <p class="font-bold">CRITICAL - ${escapeHtml(p.id)}</p>
                                 <p class="text-xs opacity-75">${escapeHtml(p.name)}</p>
                             </div>
                             <span class="text-xs font-bold bg-critical-200 px-2 py-0.5 rounded-full text-nowrap">${bpm} BPM</span>
@@ -419,8 +443,8 @@ ws.addEventListener('message', (event) => {
                     </div>`;
                 alertDom.prepend(el);
                 criticalAlerts.set(p.id, { bpm, element: el });
-                showToast(`Alert: ${escapeHtml(p.name)} — BPM ${bpm}`, 'error');
-                addLog(`⚠️ New Alert: ${p.id} (${escapeHtml(p.name)}) — BPM: ${bpm}`, 'error');
+                showToast(`Alert: ${escapeHtml(p.name)} - BPM ${bpm}`, 'error');
+                addLog(`New Alert: ${p.id} (${escapeHtml(p.name)}) - BPM: ${bpm}`, 'error');
             } else if (hasAlert && isCritical) {
                 // Update existing alert's BPM if changed
                 const alertData = criticalAlerts.get(p.id);
@@ -430,7 +454,7 @@ ws.addEventListener('message', (event) => {
                         const bpmDisplay = alertData.element.querySelector('.font-bold.bg-critical-200');
                         if (bpmDisplay) bpmDisplay.textContent = `${bpm} BPM`;
                     }
-                    addLog(`🔄 Alert Update: ${p.id} — BPM: ${bpm}`, 'info');
+                    addLog(`Alert Update: ${p.id} - BPM: ${bpm}`, 'info');
                 }
             }
         });
@@ -440,10 +464,11 @@ ws.addEventListener('message', (event) => {
             alertDom.innerHTML = `
                 <div class="flex items-center justify-center py-8 text-slate-400">
                     <div class="flex flex-col items-center gap-2">
-                        <span class="text-3xl">✅</span>
+                        ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
                         <span class="text-sm">Tidak ada alert aktif</span>
                     </div>
                 </div>`;
+            refreshIcons();
         }
 
         addLog('Antrian triage tersinkronisasi', 'info');
@@ -469,7 +494,7 @@ ws.addEventListener('message', (event) => {
             el.className = 'flex items-start gap-3 p-4 rounded-lg bg-critical-50 border-2 border-critical-300 text-critical-800 text-sm shadow-md';
             el.dataset.patientId = patientId;
             el.innerHTML = `
-                <span class="text-2xl shrink-0 animate-pulse">🚨</span>
+                ${icon('shield-alert', 'w-6 h-6 shrink-0 animate-pulse text-critical-700 mt-0.5')}
                 <div class="flex-1 min-w-0">
                     <p class="font-bold text-base">${escapeHtml(alert.message)}</p>
                     <p class="text-xs opacity-80 mt-1">${patientName} (${escapeHtml(patientId)})</p>
@@ -484,7 +509,7 @@ ws.addEventListener('message', (event) => {
             // Ensure table/modal reflect the newest bpm
             updatePatientBpm(patientId, bpm);
             showToast(`${patientName}: ${alert.message}`, 'error');
-            addLog(`🚨 CRITICAL ALERT: ${patientName} (${patientId}) — ${bpm} BPM`, 'error');
+            addLog(`CRITICAL ALERT: ${patientName} (${patientId}) - ${bpm} BPM`, 'error');
 
         } else if (isCritical && criticalAlerts.has(patientId)) {
             // Update existing CRITICAL alert with new BPM
@@ -499,7 +524,7 @@ ws.addEventListener('message', (event) => {
                 }
                 // Update table/modal as well
                 updatePatientBpm(patientId, bpm);
-                addLog(`🔄 Alert Update: ${patientName} — ${bpm} BPM`, 'warning');
+                addLog(`Alert Update: ${patientName} - ${bpm} BPM`, 'warning');
             }
 
         } else if (!isCritical && criticalAlerts.has(patientId)) {
@@ -517,27 +542,29 @@ ws.addEventListener('message', (event) => {
                 alertDom.innerHTML = `
                     <div class="flex items-center justify-center py-8 text-slate-400">
                         <div class="flex flex-col items-center gap-2">
-                            <span class="text-3xl">✅</span>
+                            ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
                             <span class="text-sm">Semua pasien dalam kondisi stabil</span>
                         </div>
                     </div>`;
             }
             
-            showToast(`✅ ${patientName}: ${alert.message}`, 'success');
-            addLog(`✅ NORMALIZED: ${patientName} — ${bpm} BPM`, 'success');
+            showToast(`${patientName}: ${alert.message}`, 'success');
+            addLog(`NORMALIZED: ${patientName} - ${bpm} BPM`, 'success');
         }
 
     } else if (msg.type === 'REGISTER_SUCCESS') {
         totalPatients++;
         showToast(`Pasien terdaftar: ${escapeHtml(msg.data.patient_id)}`, 'success');
-        addLog(`Pasien terdaftar: <strong>${escapeHtml(msg.data.patient_id)}</strong> — Status: ${escapeHtml(msg.data.status)}`, 'success');
+        addLog(`Pasien terdaftar: <strong>${escapeHtml(msg.data.patient_id)}</strong> - Status: ${escapeHtml(msg.data.status)}`, 'success');
 
     } else if (msg.type === 'ERROR') {
         addLog(`Error: ${escapeHtml(msg.data)}`, 'error');
     }
 });
 
-// ── Button Handlers ────────────────────────────────────────────────────
+refreshIcons();
+
+// Button Handlers
 $('btnReg').addEventListener('click', () => {
     const name      = $('pName').value.trim();
     const age       = parseInt($('pAge').value);
@@ -562,7 +589,7 @@ $('btnReg').addEventListener('click', () => {
     $('pName').value = '';
     $('pAge').value = '';
     $('pComplaint').value = '';
-    addLog(`Mengirim registrasi: ${name}…`, 'info');
+    addLog(`Mengirim registrasi: ${name}...`, 'info');
 });
 
 $('btnVit').addEventListener('click', () => {
@@ -585,7 +612,7 @@ $('btnVit').addEventListener('click', () => {
         payload: { patient_id, bpm }
     }));
 
-    addLog(`Mengirim vitals: ${patient_id} → ${bpm} BPM`, 'info');
+    addLog(`Mengirim vitals: ${patient_id} -> ${bpm} BPM`, 'info');
 });
 
 $('btnClearLog').addEventListener('click', () => {
@@ -593,7 +620,7 @@ $('btnClearLog').addEventListener('click', () => {
     addLog('Log dibersihkan', 'info');
 });
 
-// ── Modal Event Listeners ────────────────────────────────────────────
+// Modal Event Listeners
 btnCloseModal.addEventListener('click', closeModal);
 patientModal.addEventListener('click', (e) => {
     if (e.target === patientModal) closeModal();
@@ -602,7 +629,7 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && patientModal.style.display === 'flex') closeModal();
 });
 
-// ── Enter-key Submit Support ───────────────────────────────────────────
+// Enter-key Submit Support
 ['pName', 'pAge', 'pComplaint'].forEach(id => {
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnReg').click(); });
 });
@@ -610,14 +637,14 @@ document.addEventListener('keydown', (e) => {
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnVit').click(); });
 });
 
-// ── Search Functionality ───────────────────────────────────────────────
+// Search Functionality
 queueSearch.addEventListener('input', (e) => {
     searchQuery = e.target.value;
     currentPage = 1; // Reset to page 1 on search
     renderQueue(queueData); // Re-render with filter
 });
 
-// ── Pagination ───────────────────────────────────────────────────────
+// Pagination
 btnPrevPage.addEventListener('click', () => {
     if (currentPage > 1) {
         currentPage--;
