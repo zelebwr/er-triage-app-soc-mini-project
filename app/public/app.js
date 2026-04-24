@@ -54,10 +54,10 @@ function showToast(message, type = 'info', duration = 4000) {
 
     const toast = document.createElement('div');
     toast.id = id;
-    toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto flex items-start gap-3 animate-[slideIn_0.3s_ease-out]`;
+    toast.className = `${colors[type] || colors.info} text-white px-4 py-3 rounded-lg shadow-lg pointer-events-auto flex items-start gap-3 transition-all duration-300 ease-out animate-[slideIn_0.3s_ease-out]`;
     toast.innerHTML = `
         <span class="text-lg shrink-0">${icons[type] || 'ℹ️'}</span>
-        <div class="flex-1">
+        <div class="flex-1 flex items-center gap-2">
             <p class="text-sm font-medium">${message}</p>
         </div>
     `;
@@ -65,7 +65,9 @@ function showToast(message, type = 'info', duration = 4000) {
 
     setTimeout(() => {
         toast.classList.add('opacity-0', 'translate-x-full');
-        setTimeout(() => toast.remove(), 300);
+        toast.addEventListener('transitionend', () => {
+            toast.remove();
+        }, { once: true });
     }, duration);
 }
 
@@ -78,8 +80,15 @@ if (!document.getElementById('toast-animation-style')) {
             from { transform: translateX(100%); opacity: 0; }
             to { transform: translateX(0); opacity: 1; }
         }
+        @keyframes slideOut {
+            from { transform: translateX(0); opacity: 1; }
+            to { transform: translateX(100%); opacity: 0; }
+        }
         .animate-\\[slideIn_0\\.3s_ease-out\\] {
             animation: slideIn 0.3s ease-out;
+        }
+        .animate-\[slideOut_0\.3s_ease-out\] {
+            animation: slideOut 0.3s ease-out;
         }
     `;
     document.head.appendChild(style);
@@ -288,6 +297,32 @@ function escapeHtml(str) {
     return div.innerHTML;
 }
 
+// ── Update BPM in UI ─────────────────────────────────────────────────
+function updatePatientBpm(patientId, bpm) {
+    // Update queueData model
+    const p = queueData.find(x => x.id === patientId);
+    if (p) p.bpm = bpm;
+
+    // Update rendered table row if exists
+    document.querySelectorAll('#queueTable tr[data-patient-id]').forEach(row => {
+        if (row.dataset.patientId === patientId) {
+            const cells = row.children;
+            if (cells && cells.length) {
+                const bpmCell = cells[cells.length - 1]; // last cell is BPM
+                if (bpmCell) bpmCell.innerHTML = bpmBadge(bpm);
+            }
+        }
+    });
+
+    // If modal for this patient is open, re-open it to refresh contents
+    if (patientModal.style.display === 'flex') {
+        const headerIdEl = modalBody.querySelector('.font-mono.text-lg.font-bold');
+        if (headerIdEl && headerIdEl.textContent === patientId) {
+            openPatientModal(patientId);
+        }
+    }
+}
+
 // ── WebSocket Connection ───────────────────────────────────────────────
 const ws = new WebSocket('ws://' + window.location.host);
 
@@ -355,6 +390,7 @@ ws.addEventListener('message', (event) => {
             addLog(`✅ Pasien ${p.id} vitals kembali normal (${p.bpm} BPM)`, 'success');
         });
 
+        // NOTIFIKASI ALERT YANG DIV
         // Check for NEW critical patients and create alerts for them
         msg.data.forEach(p => {
             const bpm = parseInt(p.bpm) || 0;
@@ -383,7 +419,7 @@ ws.addEventListener('message', (event) => {
                     </div>`;
                 alertDom.prepend(el);
                 criticalAlerts.set(p.id, { bpm, element: el });
-                showToast(`🚨 Alert: ${escapeHtml(p.name)} — BPM ${bpm}`, 'error');
+                showToast(`Alert: ${escapeHtml(p.name)} — BPM ${bpm}`, 'error');
                 addLog(`⚠️ New Alert: ${p.id} (${escapeHtml(p.name)}) — BPM: ${bpm}`, 'error');
             } else if (hasAlert && isCritical) {
                 // Update existing alert's BPM if changed
@@ -445,7 +481,9 @@ ws.addEventListener('message', (event) => {
             alertDom.prepend(el);
 
             criticalAlerts.set(patientId, { bpm, element: el });
-            showToast(`🚨 ${patientName}: ${alert.message}`, 'error');
+            // Ensure table/modal reflect the newest bpm
+            updatePatientBpm(patientId, bpm);
+            showToast(`${patientName}: ${alert.message}`, 'error');
             addLog(`🚨 CRITICAL ALERT: ${patientName} (${patientId}) — ${bpm} BPM`, 'error');
 
         } else if (isCritical && criticalAlerts.has(patientId)) {
@@ -459,6 +497,8 @@ ws.addEventListener('message', (event) => {
                     const msgDisplay = existing.element.querySelector('.font-bold.text-base');
                     if (msgDisplay) msgDisplay.textContent = escapeHtml(alert.message);
                 }
+                // Update table/modal as well
+                updatePatientBpm(patientId, bpm);
                 addLog(`🔄 Alert Update: ${patientName} — ${bpm} BPM`, 'warning');
             }
 
@@ -469,6 +509,8 @@ ws.addEventListener('message', (event) => {
                 alertData.element.remove();
             }
             criticalAlerts.delete(patientId);
+            // Reflect normalization BPM in UI
+            updatePatientBpm(patientId, bpm);
             
             // If no more alerts, show empty state
             if (criticalAlerts.size === 0) {

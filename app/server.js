@@ -77,8 +77,10 @@ function monitorVitals(call) {
             call.write({ patient_id, alert_level: 'RED', message: alertMsg, bpm });
         } else if (criticalPatients.has(patient_id)) {
             // Patient returned to normal - clear stored alert
+            patient.priority = 'Normal';
             criticalPatients.delete(patient_id);
             const normalMsg = `✅ Tekanan Jantung Kembali Normal: ${bpm} BPM`;
+            broadcastQueueUpdate();
             call.write({ patient_id, alert_level: 'GREEN', message: normalMsg, bpm });
         }
     });
