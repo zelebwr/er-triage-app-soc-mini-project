@@ -360,7 +360,7 @@ ws.addEventListener('open', () => {
     queueData = [];
     criticalAlerts.clear();
     alertDom.innerHTML = `
-        <div class="flex items-center justify-center py-8 text-slate-400">
+        <div id="emptyAlertState" class="flex items-center justify-center py-8 text-slate-400 text-center">
             <div class="flex flex-col items-center gap-2">
                 ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
                 <span class="text-sm">Tidak ada alert aktif</span>
@@ -423,7 +423,7 @@ ws.addEventListener('message', (event) => {
             
             if (isCritical && !hasAlert) {
                 // New critical patient - create alert
-                const emptyState = alertDom.querySelector('.text-center');
+                const emptyState = alertDom.querySelector('#emptyAlertState');
                 if (emptyState) emptyState.remove();
                 
                 const el = document.createElement('div');
@@ -460,9 +460,9 @@ ws.addEventListener('message', (event) => {
         });
 
         // Hide "no alerts" message if no critical patients
-        if (criticalAlerts.size === 0 && alertDom.querySelector('.text-center') === null) {
+        if (criticalAlerts.size === 0 && alertDom.querySelector('#emptyAlertState') === null) {
             alertDom.innerHTML = `
-                <div class="flex items-center justify-center py-8 text-slate-400">
+                <div id="emptyAlertState" class="flex items-center justify-center py-8 text-slate-400">
                     <div class="flex flex-col items-center gap-2">
                         ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
                         <span class="text-sm">Tidak ada alert aktif</span>
@@ -482,7 +482,7 @@ ws.addEventListener('message', (event) => {
         // HOW: Trap 'ERROR' severity before evaluating vital thresholds to trigger UI visual feedback
         if (alert.alert_level === 'ERROR') {
             showToast(alert.message, 'error');
-            addLog(Telemetry Error: ${alert.message}, 'error');
+            addLog(`Telemetry Error: ${alert.message}`, 'error');
             return;
         }
 
