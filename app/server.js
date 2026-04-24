@@ -3,7 +3,7 @@ const protoLoader = require('@grpc/proto-loader');
 const crypto = require('crypto');
 
 // Synchronous blocking load of Protocol Buffer definition
-const packageDefinition = prootLoader.loadSync('triage.proto', {
+const packageDefinition = protoLoader.loadSync('triage.proto', {
     keepCase: true,
     longs: String,
     enums: String,
@@ -15,7 +15,7 @@ const triageProto = grpc.loadPackageDefinition(packageDefinition).triage;
 // In-memory state management.
 const patientsState = new Map();
 let triageQueue = [];
-const dashboadStreams = new Set();
+const dashboardStreams = new Set();
 
 // Broadcasts mutated state to all active Dashboard (server-side stream)
 function broadcastQueueUpdate() {
@@ -37,7 +37,7 @@ function registerPatient(call, callback) {
             details: "Name required"
         });
     }
-    const patientID = 'P-'  crypto.randomBytes(2).toString('hex').toUpperCase();
+    const patientID = 'P-' + crypto.randomBytes(2).toString('hex').toUpperCase();
 
     patientState.set(patientId, {
         id: patientId, name, age, complaint,
@@ -60,19 +60,19 @@ function monitorVitals(call) {
         
         if (bpm < 50 || bpm > 120) {
           patient.priority = 'CRITICAL';
-          // Mechanism: Mutates global queue order. Shifts critical patient to index 0.
+          // Mutates global queue order. Shifts critical patient to index 0.
           triageQueue = triageQueue.filter(p => p.id !== patient_id);
           triageQueue.unshift(patient);
           broadcastQueueUpdate();
           
-          // Mechanism: Asynchronous push alert back to the specific transmitting IoT client
+          // Asynchronous push alert back to the specific transmitting IoT client
           call.write({ patient_id, alert_level: "RED", message: `CRITICAL BPM: ${bpm}` });
         }
     });
     call.on('end', () => call.end());
 }
 
-// Mechanism: Server-side RPC. Client connects -> Added to pool -> Awaits pushed state mutations[cite: 3].
+// Server-side RPC. Client connects -> Added to pool -> Awaits pushed state mutations[cite: 3].
 function streamQueue(call) {
   dashboardStreams.add(call);
   call.write({ raw_html_queue: JSON.stringify(triageQueue) }); // Send initial state
@@ -85,13 +85,23 @@ function streamQueue(call) {
 // Architecture: Port Binding and Server Initialization.
 const server = new grpc.Server();
 server.addService(triageProto.AdmissionService.service, {
-  RegisterPatient: registerPatient,
-  MonitorVitals: monitorVitals,
-  StreamQueue: streamQueue
+    // Binds the unary registration logic to the Admission microservice
+    RegisterPatient: registerPatient
 });
 
+server.addService(triageProto.VitalsService.service, {
+    // Binds the bi-directional streaming logic to the Vitals microservice[cite: 3].
+    MonitorVitals: monitorVitals
+});
+
+server.addService(triageProto.DashboardService.service, {
+    // Binds the server-side push logic to the Dashboard microservice[cite: 3].
+    StreamQueue: streamQueue
+ });
+
 server.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), () => {
-  // Starts the gRPC listener on standard unencrypted port.
+    // Starts the gRPC listener on standard unencrypted port.
+    console.log("gRPC Microservice active on 0.0.0.0:50051");
 });
 
 module.exports = { server, triageQueue, patientsState, broadcastQueueUpdate };
@@ -131,7 +141,7 @@ wss.on('connection', (ws) => {
     ws.on('message', (message) => {
         const parsedMsg = JSON.parse(message);
 
-        // Mechanism: Command & Control Bridge -> Browser instructions trigger native gRPC executions.
+        // Command & Control Bridge -> Browser instructions trigger native gRPC executions.
         if (parsedMsg.action === 'REGISTER') {
             localAdmissionClient.RegisterPatient(parsedMsg.payload, (err, response) => {
                 if (err) return ws.send(JSON.stringify({ type: 'ERROR', data: err.details }));
@@ -145,6 +155,7 @@ wss.on('connection', (ws) => {
 });
 
 httpServer.listen(8080, '0.0.0.0', () => {
-  // Starts the Web/WebSocket gateway on port 8080 for Nginx/ModSecurity edge ingestion.
+    // Starts the Web/WebSocket gateway on port 8080 for Nginx/ModSecurity edge ingestion.
+    console.log("WebSocket Gateway active on 0.0.0.0:8080");
 });
 
