@@ -37,9 +37,9 @@ function registerPatient(call, callback) {
             details: "Name required"
         });
     }
-    const patientID = 'P-' + crypto.randomBytes(2).toString('hex').toUpperCase();
+    const patientId = 'P-' + crypto.randomBytes(2).toString('hex').toUpperCase();
 
-    patientState.set(patientId, {
+    patientsState.set(patientId, {
         id: patientId, name, age, complaint,
         priority: 'Normal',
         bpm: 0
@@ -142,7 +142,9 @@ wss.on('connection', (ws) => {
         const parsedMsg = JSON.parse(message);
 
         // Command & Control Bridge -> Browser instructions trigger native gRPC executions.
-        if (parsedMsg.action === 'REGISTER') {
+        if (parsedMsg.action === 'FETCH_QUEUE') {
+            ws.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: triageQueue }));
+        } else if (parsedMsg.action === 'REGISTER') {
             localAdmissionClient.RegisterPatient(parsedMsg.payload, (err, response) => {
                 if (err) return ws.send(JSON.stringify({ type: 'ERROR', data: err.details }));
                 ws.send(JSON.stringify({ type: 'REGISTER_SUCCESS', data: response }));

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency Room Triage — SOC Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary:   { 50:'#eff6ff', 100:'#dbeafe', 200:'#bfdbfe', 300:'#93c5fd', 400:'#60a5fa', 500:'#3b82f6', 600:'#2563eb', 700:'#1d4ed8', 800:'#1e40af', 900:'#1e3a5f' },
+                        med:       { 50:'#f0fdfa', 100:'#ccfbf1', 200:'#99f6e4', 300:'#5eead4', 400:'#2dd4bf', 500:'#14b8a6', 600:'#0d9488', 700:'#0f766e', 800:'#115e59', 900:'#134e4a' },
+                        critical:  { 50:'#fef2f2', 100:'#fee2e2', 400:'#f87171', 500:'#ef4444', 600:'#dc2626', 700:'#b91c1c', 800:'#991b1b', 900:'#7f1d1d' },
+                        slate:     { 750:'#293548', 850:'#172033' }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-slate-100 min-h-screen font-sans text-slate-800 antialiased">
+
+<!-- Toast Notification Container -->
+<div id="toastContainer" class="fixed top-4 right-4 z-[100] space-y-2 max-w-sm w-full pointer-events-none"></div>
+
+<!-- Top Navigation Bar -->
+<nav class="bg-primary-800 shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex items-center justify-between h-16">
+            <div class="flex items-center gap-3">
+                <span class="text-3xl">🏥</span>
+                <div>
+                    <h1 class="text-white font-bold text-lg leading-tight">ER Triage Dashboard</h1>
+                    <p class="text-primary-200 text-xs">gRPC ↔ WebSocket Bridge · Real-time Monitoring</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <span id="wsStatus" class="flex items-center gap-1.5 text-sm">
+                    <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+                    <span class="text-primary-200">Connecting…</span>
+                </span>
+                <span id="clock" class="hidden sm:inline text-primary-200 text-sm font-mono"></span>
+            </div>
+        </div>
+    </div>
+</nav>
+
+<!-- Stat Cards Row -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-primary-100 text-primary-600 flex items-center justify-center text-2xl">👥</div>
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Total Pasien</p>
+                <p id="statTotal" class="text-2xl font-bold text-slate-800">0</p>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-yellow-100 text-yellow-600 flex items-center justify-center text-2xl">⏳</div>
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Antrian</p>
+                <p id="statQueue" class="text-2xl font-bold text-slate-800">0</p>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-critical-100 text-critical-600 flex items-center justify-center text-2xl">🚨</div>
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Kritis</p>
+                <p id="statCritical" class="text-2xl font-bold text-critical-600">0</p>
+            </div>
+        </div>
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 p-4 flex items-center gap-4">
+            <div class="w-12 h-12 rounded-lg bg-med-100 text-med-600 flex items-center justify-center text-2xl">❤️</div>
+            <div>
+                <p class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Alerts</p>
+                <p id="statAlerts" class="text-2xl font-bold text-med-600">0</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content Grid -->
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 pb-10">
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- LEFT COLUMN: Forms -->
+        <div class="lg:col-span-1 space-y-6">
+
+            <!-- Register Patient Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-primary-600 px-5 py-3 flex items-center gap-2">
+                    <span class="text-xl">🩺</span>
+                    <h2 class="text-white font-semibold text-sm uppercase tracking-wider">Registrasi Pasien</h2>
+                </div>
+                <div class="p-5 space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Nama Lengkap</label>
+                        <input id="pName" placeholder="Masukkan nama pasien…" autocomplete="off"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Usia</label>
+                        <input id="pAge" type="number" min="0" max="150" placeholder="Tahun"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Keluhan Utama</label>
+                        <input id="pComplaint" placeholder="Cth: Nyeri dada, sesak napas…"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition">
+                    </div>
+                    <button id="btnReg"
+                        class="w-full bg-primary-600 hover:bg-primary-700 active:scale-[0.98] text-white font-semibold py-2.5 rounded-lg transition-all duration-150 shadow-sm hover:shadow-md flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+                        Daftar Pasien
+                    </button>
+                </div>
+            </div>
+
+            <!-- Transmit Vitals Card -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-med-600 px-5 py-3 flex items-center gap-2">
+                    <span class="text-xl">📡</span>
+                    <h2 class="text-white font-semibold text-sm uppercase tracking-wider">Simulasi Vitals (IoT)</h2>
+                </div>
+                <div class="p-5 space-y-3">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">Patient ID</label>
+                        <input id="vId" placeholder="cth: P-A1B2" autocomplete="off"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-med-400 focus:border-med-400 outline-none transition font-mono">
+                        <div id="patientSuggestions" class="mt-1.5 hidden">
+                            <p class="text-xs text-slate-400 mb-1">Pasien terdaftar — klik untuk memilih:</p>
+                            <div id="suggestionList" class="flex flex-wrap gap-1.5"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-500 mb-1">BPM (Heart Rate)</label>
+                        <input id="vBpm" type="number" min="0" max="300" placeholder="50–120 normal"
+                            class="w-full rounded-lg border border-slate-300 px-4 py-2.5 text-sm focus:ring-2 focus:ring-med-400 focus:border-med-400 outline-none transition">
+                    </div>
+                    <button id="btnVit"
+                        class="w-full bg-med-600 hover:bg-med-700 active:scale-[0.98] text-white font-semibold py-2.5 rounded-lg transition-all duration-150 shadow-sm hover:shadow-md flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/></svg>
+                        Kirim Vitals
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER + RIGHT: Queue & Alerts -->
+        <div class="lg:col-span-2 space-y-6">
+
+            <!-- Triage Queue -->
+            <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <div class="bg-slate-700 px-5 py-3 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <span class="text-xl">🚑</span>
+                        <h2 class="text-white font-semibold text-sm uppercase tracking-wider">Antrian Triage Prioritas</h2>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-slate-400 text-xs hidden sm:inline">Klik baris untuk detail</span>
+                        <span id="queueCount" class="bg-primary-500 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">0</span>
+                    </div>
+                </div>
+                <!-- Search Bar -->
+                <div class="px-4 pt-3 pb-2 border-b border-slate-100">
+                    <div class="relative">
+                        <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z"/></svg>
+                        <input id="queueSearch" type="text" placeholder="Cari nama, ID, atau keluhan…"
+                            class="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 outline-none transition">
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left text-xs font-semibold text-slate-400 uppercase tracking-wider border-b border-slate-200">
+                                    <th class="px-3 py-2">#</th>
+                                    <th class="px-3 py-2">Priority</th>
+                                    <th class="px-3 py-2">Patient ID</th>
+                                    <th class="px-3 py-2">Nama</th>
+                                    <th class="px-3 py-2 hidden sm:table-cell">Usia</th>
+                                    <th class="px-3 py-2 hidden md:table-cell">Keluhan</th>
+                                    <th class="px-3 py-2">BPM</th>
+                                </tr>
+                            </thead>
+                            <tbody id="queueTable">
+                                <tr>
+                                    <td colspan="7" class="px-3 py-10 text-center text-slate-400">
+                                        <div class="flex flex-col items-center gap-2">
+                                            <svg class="w-10 h-10 text-slate-300" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+                                            Menunggu data antrian…
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <!-- Pagination -->
+                    <div id="paginationRow" class="hidden items-center justify-between mt-3 pt-3 border-t border-slate-100">
+                        <p id="paginationInfo" class="text-xs text-slate-400"></p>
+                        <div class="flex items-center gap-1">
+                            <button id="btnPrevPage" class="px-3 py-1 text-xs rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>← Prev</button>
+                            <span id="pageIndicator" class="px-2 text-xs font-semibold text-slate-600">1/1</span>
+                            <button id="btnNextPage" class="px-3 py-1 text-xs rounded-md bg-slate-100 hover:bg-slate-200 text-slate-600 transition disabled:opacity-40 disabled:cursor-not-allowed" disabled>Next →</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alert + Log split -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                <!-- Critical Alerts -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-critical-700 px-5 py-3 flex items-center gap-2">
+                        <span class="text-xl">🆘</span>
+                        <h2 class="text-white font-semibold text-sm uppercase tracking-wider">Alert Kritis</h2>
+                    </div>
+                    <div class="p-4">
+                        <div id="alertDom" class="space-y-2 max-h-64 overflow-y-auto">
+                            <div class="flex items-center justify-center py-8 text-slate-400">
+                                <div class="flex flex-col items-center gap-2">
+                                    <span class="text-3xl">✅</span>
+                                    <span class="text-sm">Tidak ada alert aktif</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Activity Log -->
+                <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div class="bg-slate-600 px-5 py-3 flex items-center justify-between">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xl">📋</span>
+                            <h2 class="text-white font-semibold text-sm uppercase tracking-wider">Log Aktivitas</h2>
+                        </div>
+                        <button id="btnClearLog" class="text-slate-300 hover:text-white text-xs transition">Clear</button>
+                    </div>
+                    <div class="p-4">
+                        <ul id="logDom" class="space-y-1 max-h-64 overflow-y-auto text-xs font-mono">
+                            <li class="text-slate-400 py-1 px-2 border-l-2 border-slate-300 bg-slate-50 rounded-r">-- monitoring dimulai --</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Patient Detail Modal (hidden by default) -->
+<div id="patientModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 backdrop-blur-sm p-4" style="display:none;">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-[fadeIn_0.15s_ease-out]">
+        <div id="modalHeader" class="bg-primary-600 px-6 py-4 flex items-center justify-between">
+            <h3 class="text-white font-bold text-lg">📋 Detail Pasien</h3>
+            <button id="btnCloseModal" class="text-white/70 hover:text-white text-2xl leading-none transition">&times;</button>
+        </div>
+        <div id="modalBody" class="p-6 space-y-4">
+            <!-- filled by JS -->
+        </div>
+    </div>
+</div>
+
+<!-- Footer -->
+<footer class="bg-slate-800 text-slate-400 text-center text-xs py-4 mt-auto">
+    🩺 ER SOC Simulation · gRPC + WebSocket · Security Operations Center Lab
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

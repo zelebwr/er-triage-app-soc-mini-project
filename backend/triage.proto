@@ -1,0 +1,38 @@
+syntax = "proto3";
+package triage;
+
+service AdmissionService {
+  rpc RegisterPatient (PatientData) returns (AdmissionResponse) {}
+}
+service VitalsService {
+  rpc MonitorVitals (stream VitalsRequest) returns (stream VitalsAlert) {}
+}
+service DashboardService {
+  rpc StreamQueue (DashboardRequest) returns (stream QueueUpdate) {}
+}
+
+message PatientData {
+  string name = 1;
+  int32 age = 2;
+  string complaint = 3;
+}
+message AdmissionResponse {
+  string patient_id = 1;
+  string status = 3;
+}
+message VitalsRequest {
+  string patient_id = 1;
+  int32 bpm = 2;
+}
+message VitalsAlert {
+  string patient_id = 1;
+  string alert_level = 2;
+  string message = 3;
+  int32 bpm = 4;
+}
+message DashboardRequest {
+  string client_id = 1;
+}
+message QueueUpdate {
+  string raw_html_queue = 1;
+}

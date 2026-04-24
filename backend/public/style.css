@@ -1,0 +1,63 @@
+/* Minimal custom styles — Tailwind handles the heavy lifting */
+
+/* Modal fade-in */
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95) translateY(10px); }
+    to   { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* Scrollbar styling for log & alert panels */
+#logDom::-webkit-scrollbar,
+#alertDom::-webkit-scrollbar {
+    width: 4px;
+}
+#logDom::-webkit-scrollbar-track,
+#alertDom::-webkit-scrollbar-track {
+    background: transparent;
+}
+#logDom::-webkit-scrollbar-thumb,
+#alertDom::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 999px;
+}
+
+/* Table responsive scroll shadow */
+.overflow-x-auto {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Smooth pulse for critical rows */
+@keyframes subtlePulse {
+    0%, 100% { background-color: rgba(254, 226, 226, 0.5); }
+    50%      { background-color: rgba(254, 226, 226, 0.25); }
+}
+.animate-pulse {
+    animation: subtlePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Focus-visible ring for inputs */
+input:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+}
+
+/* Responsive table: hide less-important columns on small screens */
+@media (max-width: 640px) {
+    table th:nth-child(5),
+    table td:nth-child(5),
+    table th:nth-child(6),
+    table td:nth-child(6) {
+        display: none;
+    }
+}
+    font-size: 12px;
+}
+#logDom li { color: #aa8888; border-bottom: 1px dotted #330000; }
+.footer {
+    text-align: center;
+    padding: 12px;
+    background: #0f0f0f;
+    font-size: 10px;
+    border-top: 1px solid #2a0000;
+}

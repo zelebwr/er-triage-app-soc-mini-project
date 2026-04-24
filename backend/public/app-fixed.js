@@ -50,4 +50,3 @@ document.getElementById('btnVit').onclick = () => {
     };
     ws.send(JSON.stringify({ action: 'TRANSMIT_VITALS', payload }));
 };
-
