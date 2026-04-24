@@ -478,6 +478,14 @@ ws.addEventListener('message', (event) => {
         const patientId = alert.patient_id;
         const bpm = parseInt(alert.bpm) || 0; // Ensure BPM is number, not '?'
 
+        // ARCHITECTURE: Intercept in-band stream errors
+        // HOW: Trap 'ERROR' severity before evaluating vital thresholds to trigger UI visual feedback
+        if (alert.alert_level === 'ERROR') {
+            showToast(alert.message, 'error');
+            addLog(Telemetry Error: ${alert.message}, 'error');
+            return;
+        }
+
         // Get patient name from queueData
         const patient = queueData.find(p => p.id === patientId);
         const patientName = patient ? escapeHtml(patient.name) : patientId;

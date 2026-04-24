@@ -58,20 +58,7 @@ function monitorVitals(call) {
     call.on('data', (vitalsRequest) => {
         const { patient_id, bpm } = vitalsRequest;
         const patient = patientsState.get(patient_id);
-        // ARCHITECTURE: Enforce state dependency without severing multiplexed stream
-        // WHY: Satisfies "NOT_FOUND" requirement. A hard gRPC exception destroys the gateway bridge.
-        // HOW: Transmit an in-band failure payload mapping to the VitalsAlert schema.
-        if (!patient) {
-            log(Rejected telemetry: Patient ID ${patient_id} NOT_FOUND.);
-            call.write({
-                patient_id: patient_id,
-                alert_level: 'ERROR',
-                message: Status NOT_FOUND: Patient ID ${patient_id} is not registered.,
-                bpm: 0
-            });
-            return;
-        }
-
+        if (!patient) return;
         patient.bpm = bpm;
         
         // Skip alerts if BPM is 0 (IoT device not connected/no data)
