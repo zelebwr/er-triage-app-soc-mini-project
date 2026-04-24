@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><title>ER SOC - gRPC-WS Bridge</title></head>
+<body>
+    <!-- Mechanism: Command & Control Input Bindings[cite: 1] -->
+    <div>
+        <input id="pName" placeholder="Name">
+        <input id="pAge" placeholder="Age" type="number">
+        <input id="pComplaint" placeholder="Complaint">
+        <button id="btnReg">Register Patient</button>
+    </div>
+    <!-- Mechanism: Simulated IoT Sensor Input -->
+    <div>
+        <input id="vId" placeholder="Patient ID (e.g., P-XXXX)">
+        <input id="vBpm" placeholder="BPM" type="number">
+        <button id="btnVit">Transmit Vitals</button>
+    </div>
+    <hr>
+    <!-- Requirement: 3 dynamic UI components driven by server pushed events[cite: 1] -->
+    <h3>Priority Triage Queue:</h3><ul id="queueDom"></ul>
+    <h3>Vitals Alert Telemetry:</h3><div id="alertDom"></div>
+    <h3>System Activity Log:</h3><ul id="logDom"></ul>
+
+    <script src="app.js"></script>
+</body>
+</html>
