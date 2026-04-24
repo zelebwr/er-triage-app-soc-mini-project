@@ -62,11 +62,11 @@ function monitorVitals(call) {
         // WHY: Satisfies "NOT_FOUND" requirement. A hard gRPC exception destroys the gateway bridge.
         // HOW: Transmit an in-band failure payload mapping to the VitalsAlert schema.
         if (!patient) {
-            log(Rejected telemetry: Patient ID ${patient_id} NOT_FOUND.);
+            log(`Rejected telemetry: Patient ID ${patient_id} NOT_FOUND.`);
             call.write({
                 patient_id: patient_id,
                 alert_level: 'ERROR',
-                message: Status NOT_FOUND: Patient ID ${patient_id} is not registered.,
+                message: "Status NOT_FOUND: Patient ID ${patient_id} is not registered.",
                 bpm: 0
             });
             return;
