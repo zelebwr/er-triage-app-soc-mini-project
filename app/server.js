@@ -96,8 +96,8 @@ function monitorVitals(call) {
             call.write({ patient_id, alert_level: 'RED', message: alertMsg, bpm });
         } else if (criticalPatients.has(patient_id)) {
             // Patient returned to normal - clear stored alert
-            log(`Patient ${patient_id} returned to normal BPM: ${bpm} BPM = status: ${patient.priority}`);
             patient.priority = 'Normal';
+            log(`Patient ${patient_id} returned to normal BPM: ${bpm} BPM = status: ${patient.priority}`);
             criticalPatients.delete(patient_id);
             const normalMsg = `Tekanan jantung kembali normal: ${bpm} BPM`;
             broadcastQueueUpdate();
