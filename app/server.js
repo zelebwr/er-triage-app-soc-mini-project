@@ -66,7 +66,7 @@ function monitorVitals(call) {
             call.write({
                 patient_id: patient_id,
                 alert_level: 'ERROR',
-                message: "Status NOT_FOUND: Patient ID ${patient_id} is not registered.",
+                message: `Status NOT_FOUND: Patient ID ${patient_id} is not registered.`,
                 bpm: 0
             });
             return;

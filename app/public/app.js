@@ -609,6 +609,13 @@ $('btnVit').addEventListener('click', () => {
         $('vId').focus();
         return;
     }
+
+    if (!patient_id) {
+        addLog('Patient ID wajib diisi!', 'warning');
+        $('vId').focus();
+        return;
+    }
+
     if (isNaN(bpm) || bpm < 0) {
         addLog('BPM tidak valid!', 'warning');
         $('vBpm').focus();
