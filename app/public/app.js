@@ -324,18 +324,44 @@ function escapeHtml(str) {
 function updatePatientBpm(patientId, bpm) {
     // Update queueData model
     const p = queueData.find(x => x.id === patientId);
-    if (p) p.bpm = bpm;
+    let priorityChanged = false;
 
-    // Update rendered table row if exists
-    document.querySelectorAll('#queueTable tr[data-patient-id]').forEach(row => {
-        if (row.dataset.patientId === patientId) {
-            const cells = row.children;
-            if (cells && cells.length) {
-                const bpmCell = cells[cells.length - 1]; // last cell is BPM
-                if (bpmCell) bpmCell.innerHTML = bpmBadge(bpm);
-            }
+    if (p) {
+        p.bpm = bpm;
+        
+        // Determine what the priority SHOULD be based on new BPM
+        const isCritical = bpm < 50 || bpm > 120;
+        const expectedPriority = isCritical ? 'CRITICAL' : 'Normal';
+
+        // Check if priority state actually changed
+        if (p.priority !== expectedPriority) {
+            p.priority = expectedPriority;
+            priorityChanged = true;
         }
-    });
+    }
+
+    if (priorityChanged) {
+        // If priority shifted, resort the array so criticals instantly float to the top
+        queueData.sort((a, b) => {
+            if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
+            if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
+            return 0;
+        });
+        
+        // Re-render the entire table to update row order AND the priority badges
+        renderQueue(queueData);
+    } else {
+        // If priority is unchanged, just do a fast update on the BPM cell
+        document.querySelectorAll('#queueTable tr[data-patient-id]').forEach(row => {
+            if (row.dataset.patientId === patientId) {
+                const cells = row.children;
+                if (cells && cells.length) {
+                    const bpmCell = cells[cells.length - 1]; // last cell is BPM
+                    if (bpmCell) bpmCell.innerHTML = bpmBadge(bpm);
+                }
+            }
+        });
+    }
 
     // If modal for this patient is open, re-open it to refresh contents
     if (patientModal.style.display === 'flex') {
@@ -344,13 +370,31 @@ function updatePatientBpm(patientId, bpm) {
             openPatientModal(patientId);
         }
     }
+    
     refreshIcons();
 }
 
+// WebSocket Connection State
+let ws = null;
+let reconnectAttempts = 0;
+const maxReconnectAttempts = 10;
+let reconnectTimeout = null;
+
 // WebSocket Connection
-const ws = new WebSocket('ws://' + window.location.host);
+
+function connectWebSocket() {
+    // Bersihkan koneksi lama jika ada
+    if (ws) {
+        ws.onclose = null;
+        ws.onerror = null;
+        ws.onmessage = null;
+        ws.close();
+    }
+
+    ws = new WebSocket('ws://' + window.location.host);
 
 ws.addEventListener('open', () => {
+    reconnectAttempts = 0; // Reset counter saat berhasil terhubung
     wsStatus.innerHTML = `
         <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
         <span class="text-green-300">Connected</span>`;
@@ -372,7 +416,9 @@ ws.addEventListener('open', () => {
     
     // Request initial queue data from server
     setTimeout(() => {
-        ws.send(JSON.stringify({ action: 'FETCH_QUEUE' }));
+        if (ws.readyState === WebSocket.OPEN) {
+            ws.send(JSON.stringify({ action: 'FETCH_QUEUE' }));
+        }
     }, 100);
 });
 
@@ -381,22 +427,38 @@ ws.addEventListener('close', () => {
         <span class="w-2.5 h-2.5 rounded-full bg-red-400"></span>
         <span class="text-red-300">Disconnected</span>`;
     addLog('WebSocket terputus dari server', 'error');
+    scheduleReconnect();
 });
 
 ws.addEventListener('error', () => {
     wsStatus.innerHTML = `
-        <span class="w-2.5 h-2.5 rounded-full bg-red-500"></span>
-        <span class="text-red-300">Error</span>`;
-    addLog('WebSocket error', 'error');
+        <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+        <span class="text-yellow-300">Error/Reconnecting...</span>`;
 });
 
 ws.addEventListener('message', (event) => {
     const msg = JSON.parse(event.data);
 
     if (msg.type === 'QUEUE_UPDATE') {
+
+        const oldBpmMap = new Map((queueData || []).map(p => [p.id, p.bpm]));
         queueData = msg.data || []; // Update queueData state first
         renderQueue(msg.data);
         updateStats(msg.data);
+
+        if (patientModal.style.display === 'flex') {
+            const headerIdEl = modalBody.querySelector('.font-mono.text-lg.font-bold');
+            if (headerIdEl) {
+                const openId = headerIdEl.textContent;
+                const newPatient = queueData.find(p => p.id === openId);
+                
+                // If the BPM changed silently, re-render the modal immediately
+                if (newPatient && newPatient.bpm !== oldBpmMap.get(openId)) {
+                    openPatientModal(openId); 
+                }
+            }
+        }
+
 
         // Check for patients who returned to normal (clear their alerts)
         const normalPatients = msg.data.filter(p => {
@@ -558,6 +620,10 @@ ws.addEventListener('message', (event) => {
             
             showToast(`${patientName}: ${alert.message}`, 'success');
             addLog(`NORMALIZED: ${patientName} - ${bpm} BPM`, 'success');
+        } else if (!isCritical && !criticalAlerts.has(patientId)) {
+            // NEW: SILENT TELEMETRY UPDATE
+            // This catches Case 1 (Normal-to-Normal) and updates the queue UI silently
+            updatePatientBpm(patientId, bpm);
         }
 
     } else if (msg.type === 'REGISTER_SUCCESS') {
@@ -569,11 +635,42 @@ ws.addEventListener('message', (event) => {
         addLog(`Error: ${escapeHtml(msg.data)}`, 'error');
     }
 });
+}
+
+function scheduleReconnect() {
+    if (reconnectAttempts < maxReconnectAttempts) {
+        reconnectAttempts++;
+        // Jeda bertahap: 1s, 1.5s, 2.25s, dst, maksimal 10 detik
+        const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts), 10000); 
+        
+        wsStatus.innerHTML = `
+            <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse"></span>
+            <span class="text-yellow-300">Reconnecting (${reconnectAttempts}/${maxReconnectAttempts})...</span>`;
+        addLog(`Mencoba menghubungkan kembali dalam ${(delay/1000).toFixed(1)} detik...`, 'warning');
+        
+        clearTimeout(reconnectTimeout);
+        reconnectTimeout = setTimeout(connectWebSocket, delay);
+    } else {
+        wsStatus.innerHTML = `
+            <span class="w-2.5 h-2.5 rounded-full bg-red-600"></span>
+            <span class="text-red-300">Koneksi Gagal</span>`;
+        addLog('Batas maksimal percobaan koneksi tercapai. Silakan refresh halaman secara manual.', 'error');
+    }
+}
+
+// Mulai koneksi pertama kali
+connectWebSocket();
 
 refreshIcons();
 
 // Button Handlers
 $('btnReg').addEventListener('click', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addLog('Koneksi terputus! Tidak dapat meregistrasi pasien saat ini.', 'error');
+        showToast('Gagal: Koneksi terputus dari server', 'error');
+        return;
+    }
+
     const name      = $('pName').value.trim();
     const age       = parseInt($('pAge').value);
     const complaint = $('pComplaint').value.trim();
@@ -601,6 +698,12 @@ $('btnReg').addEventListener('click', () => {
 });
 
 $('btnVit').addEventListener('click', () => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+        addLog('Koneksi terputus! Tidak dapat mengirim vitals saat ini.', 'error');
+        showToast('Gagal: Koneksi terputus dari server', 'error');
+        return;
+    }
+
     const patient_id = $('vId').value.trim();
     const bpm        = parseInt($('vBpm').value);
 
@@ -647,6 +750,7 @@ document.addEventListener('keydown', (e) => {
 // Enter-key Submit Support
 ['pName', 'pAge', 'pComplaint'].forEach(id => {
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnReg').click(); });
+
 });
 ['vId', 'vBpm'].forEach(id => {
     $(id).addEventListener('keydown', (e) => { if (e.key === 'Enter') $('btnVit').click(); });

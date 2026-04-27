@@ -82,7 +82,6 @@ function monitorVitals(call) {
             log(`Critical alert for patient ${patient_id}: BPM ${bpm} = status: ${patient.priority}`);
             triageQueue = triageQueue.filter(p => p.id !== patient_id);
             triageQueue.unshift(patient);
-            broadcastQueueUpdate();
             // Store critical alert for persistence
             const alertMsg = bpm < 50 
                 ? `Tekanan jantung sangat rendah: ${bpm} BPM`
@@ -100,10 +99,19 @@ function monitorVitals(call) {
             log(`Patient ${patient_id} returned to normal BPM: ${bpm} BPM = status: ${patient.priority}`);
             criticalPatients.delete(patient_id);
             const normalMsg = `Tekanan jantung kembali normal: ${bpm} BPM`;
-            broadcastQueueUpdate();
             call.write({ patient_id, alert_level: 'GREEN', message: normalMsg, bpm });
+        } else {
+            // NEW: Send a silent telemetry update for Normal-to-Normal changes
+            call.write({ patient_id, alert_level: 'INFO', message: 'Telemetry update', bpm });
         }
     });
+
+        triageQueue.sort((a, b) => {
+            if (a.priority === 'CRITICAL' && b.priority !== 'CRITICAL') return -1;
+            if (a.priority !== 'CRITICAL' && b.priority === 'CRITICAL') return 1;
+            return 0; // Maintain existing order for others
+        });
+        broadcastQueueUpdate();
     call.on('end', () => call.end());
 }
 
