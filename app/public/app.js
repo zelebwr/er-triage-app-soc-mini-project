@@ -410,6 +410,9 @@ ws.addEventListener('open', () => {
                 <span class="text-sm">Tidak ada alert aktif</span>
             </div>
         </div>`;
+    updateStats(queueData);
+    addlog('Antrian triage tersinkronisasi', 'info');
+    
     currentPage = 1;
     searchQuery = '';
     queueSearch.value = '';
@@ -444,7 +447,6 @@ ws.addEventListener('message', (event) => {
         const oldBpmMap = new Map((queueData || []).map(p => [p.id, p.bpm]));
         queueData = msg.data || []; // Update queueData state first
         renderQueue(msg.data);
-        updateStats(msg.data);
 
         if (patientModal.style.display === 'flex') {
             const headerIdEl = modalBody.querySelector('.font-mono.text-lg.font-bold');
@@ -625,9 +627,11 @@ ws.addEventListener('message', (event) => {
             // This catches Case 1 (Normal-to-Normal) and updates the queue UI silently
             updatePatientBpm(patientId, bpm);
         }
+        updateStats(queueData);
 
     } else if (msg.type === 'REGISTER_SUCCESS') {
         totalPatients++;
+        $('statTotal').textContent = totalPatients;
         showToast(`Pasien terdaftar: ${escapeHtml(msg.data.patient_id)}`, 'success');
         addLog(`Pasien terdaftar: <strong>${escapeHtml(msg.data.patient_id)}</strong> - Status: ${escapeHtml(msg.data.status)}`, 'success');
 
