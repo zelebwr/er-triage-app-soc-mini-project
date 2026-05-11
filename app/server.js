@@ -22,6 +22,8 @@ const triageProto = grpc.loadPackageDefinition(packageDefinition).triage;
 const patientsState = new Map();
 let triageQueue = [];
 const dashboardStreams = new Set();
+let cachedAdminStatus = null;
+let cachedEnvStatus = null;
 
 function createPatientId() {
     return `P-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
@@ -167,14 +169,16 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
 
     mqttClient.on('message', (topic, message, packet) => {
         if (topic === 'er/admin/status') {
-            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ADMIN', data: JSON.parse(message.toString()), retain: packet.retain })));
+            cachedAdminStatus = { data: JSON.parse(message.toString()), retain: packet.retain };
+            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ADMIN', ...cachedAdminStatus })));
             return;
         }
         if (topic.endsWith('/env')) {
             const payload = JSON.parse(message.toString());
             const metadata = packet.properties?.userProperties;
             const expiry = packet.properties?.messageExpiryInterval;
-            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ENV', data: payload, retain: packet.retain, expiry, metadata })));
+            cachedEnvStatus = { data: payload, retain: packet.retain, expiry, metadata };
+            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ENV', ...cachedEnvStatus })));
             return;
         }
         if (topic === 'er/admin/request') {
@@ -227,6 +231,8 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
                 
                 // Send all active critical alerts with small delay
                 setTimeout(() => {
+                    if (cachedAdminStatus) ws.send(JSON.stringify({ type: 'MQTT_ADMIN', ...cachedAdminStatus }));
+                    if (cachedEnvStatus) ws.send(JSON.stringify({ type: 'MQTT_ENV', ...cachedEnvStatus }));
                     criticalPatients.forEach((alert, patientId) => {
                         ws.send(JSON.stringify({
                             type: 'VITALS_ALERT',
