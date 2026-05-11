@@ -393,29 +393,29 @@ function connectWebSocket() {
 
     ws = new WebSocket('ws://' + window.location.host);
 
-ws.addEventListener('open', () => {
-    reconnectAttempts = 0; // Reset counter saat berhasil terhubung
-    wsStatus.innerHTML = `
-        <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
-        <span class="text-green-300">Connected</span>`;
-    addLog('WebSocket terhubung ke server', 'success');
-    
-    // Clear UI state before fetching fresh data
-    queueData = [];
-    criticalAlerts.clear();
-    alertDom.innerHTML = `
-        <div id="emptyAlertState" class="flex items-center justify-center py-8 text-slate-400 text-center">
-            <div class="flex flex-col items-center gap-2">
-                ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
-                <span class="text-sm">Tidak ada alert aktif</span>
-            </div>
-        </div>`;
-    updateStats(queueData);
-    addLog('Antrian triage tersinkronisasi', 'info');
+    ws.addEventListener('open', () => {
+        reconnectAttempts = 0; // Reset counter saat berhasil terhubung
+        wsStatus.innerHTML = `
+            <span class="w-2.5 h-2.5 rounded-full bg-green-400"></span>
+            <span class="text-green-300">Connected</span>`;
+        addLog('WebSocket terhubung ke server', 'success');
+        
+        // Clear UI state before fetching fresh data
+        queueData = [];
+        criticalAlerts.clear();
+        alertDom.innerHTML = `
+            <div id="emptyAlertState" class="flex items-center justify-center py-8 text-slate-400 text-center">
+                <div class="flex flex-col items-center gap-2">
+                    ${icon('check-circle-2', 'w-8 h-8 text-med-500')}
+                    <span class="text-sm">Tidak ada alert aktif</span>
+                </div>
+            </div>`;
+        updateStats(queueData);
+        addLog('Antrian triage tersinkronisasi', 'info');
 
-    currentPage = 1;
-    searchQuery = '';
-    queueSearch.value = '';
+        currentPage = 1;
+        searchQuery = '';
+        queueSearch.value = '';
     
     // Request initial queue data from server
     setTimeout(() => {
@@ -424,7 +424,6 @@ ws.addEventListener('open', () => {
         }
     }, 100);
 });
-}
 
 ws.addEventListener('close', () => {
     wsStatus.innerHTML = `
@@ -630,7 +629,7 @@ ws.addEventListener('message', (event) => {
         }
         updateStats(queueData);
 
-    } else if (msg.type === 'REGISTER_SUCCESS') {
+        } else if (msg.type === 'REGISTER_SUCCESS') {
         totalPatients++;
         $('statTotal').textContent = totalPatients;
         showToast(`Pasien terdaftar: ${escapeHtml(msg.data.patient_id)}`, 'success');
@@ -638,15 +637,19 @@ ws.addEventListener('message', (event) => {
 
     } else if (msg.type === 'ERROR') {
         addLog(`Error: ${escapeHtml(msg.data)}`, 'error');
+
+// REASONING: Unified MQTT_ADMIN parsing block.
     } else if (msg.type === 'MQTT_ADMIN') {
         const el = $('statAdmin');
         const isOnline = msg.data.status === 'ONLINE';
         el.innerHTML = `<span class="${isOnline ? 'text-med-600' : 'text-critical-600'}">${msg.data.status}</span> ${msg.retain ? '<span class="text-xs text-slate-400">(Retained)</span>' : ''}`;
         if (!isOnline) addLog(`Admin Node Offline: ${msg.data.reason}`, 'error');
+
+// REASONING: Unified MQTT_ENV parsing block.
     } else if (msg.type === 'MQTT_ENV') {
-        const el = $('statEnv'); 
+        const el = $('statEnv');
         let metaHtml = msg.metadata ? Object.entries(msg.metadata).map(([k,v]) => `<span class="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-xs font-mono text-slate-600">${k}:${v}</span>`).join('') : '';
-        
+
         el.innerHTML = `
             <div class="bg-slate-50 px-3 py-1 rounded">Temp: <b>${msg.data.temp}°C</b></div>
             <div class="bg-slate-50 px-3 py-1 rounded">Hum: <b>${msg.data.humidity}%</b></div>
@@ -654,10 +657,10 @@ ws.addEventListener('message', (event) => {
             <div class="ml-auto text-xs font-semibold ${msg.retain ? 'text-primary-600' : 'text-slate-500'}">
                 ${msg.retain ? '[RETAINED FLAG]' : ''} Expiry: <span id="envExpiry">${msg.expiry || 'N/A'}</span>s
             </div>`;
-    
+
         if (window.envInterval) clearInterval(window.envInterval);
         if (msg.expiry) {
-            let timeLeft = msg.expiry; 
+            let timeLeft = msg.expiry;
             window.envInterval = setInterval(() => {
                 timeLeft--;
                 const expEl = $('envExpiry');
@@ -671,6 +674,8 @@ ws.addEventListener('message', (event) => {
         }
     }
 });
+}
+
 
 function scheduleReconnect() {
     if (reconnectAttempts < maxReconnectAttempts) {
