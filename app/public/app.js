@@ -637,10 +637,15 @@ ws.addEventListener('message', (event) => {
 
     } else if (msg.type === 'ERROR') {
         addLog(`Error: ${escapeHtml(msg.data)}`, 'error');
-        
-    } else if (msg.type === ' MQTT_ADMIN') {
+    } else if (msg.type === 'MQTT_ADMIN') {
+        const el = $('statAdmin');
+        const isOnline = msg.data.status === 'ONLINE';
+        el.innerHTML = `<span class="${isOnline ? 'text-med-600' : 'text-critical-600'}">${msg.data.status}</span> ${msg.retain ? '<span class="text-xs text-slate-400">(Retained)</span>' : ''}`;
+        if (!isOnline) addLog(`Admin Node Offline: ${msg.data.reason}`, 'error');
+    } else if (msg.type === 'MQTT_ENV') {
         const el = $('statEnv'); 
         let metaHtml = msg.metadata ? Object.entries(msg.metadata).map(([k,v]) => `<span class="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-xs font-mono text-slate-600">${k}:${v}</span>`).join('') : '';
+        
         el.innerHTML = `
             <div class="bg-slate-50 px-3 py-1 rounded">Temp: <b>${msg.data.temp}°C</b></div>
             <div class="bg-slate-50 px-3 py-1 rounded">Hum: <b>${msg.data.humidity}%</b></div>
@@ -649,7 +654,6 @@ ws.addEventListener('message', (event) => {
                 ${msg.retain ? '[RETAINED FLAG]' : ''} Expiry: <span id="envExpiry">${msg.expiry || 'N/A'}</span>s
             </div>`;
     
-        
         if (window.envInterval) clearInterval(window.envInterval);
         if (msg.expiry) {
             let timeLeft = msg.expiry; 
@@ -667,7 +671,6 @@ ws.addEventListener('message', (event) => {
     }
 });
 
-}
 
 function scheduleReconnect() {
     if (reconnectAttempts < maxReconnectAttempts) {
