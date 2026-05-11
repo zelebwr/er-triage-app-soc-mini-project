@@ -12,7 +12,7 @@ client.on('connect', () => {
             temp: (Math.random() * 5 + 20).toFixed(1), // Random temp between 20.0 and 25.0
             humidity: (Math.random() * 10 + 40).toFixed(1) // Random humidity between 40.0 and 50.0
         })
-        client.public('er/room1/env',payload, {
+        client.publish('er/room1/env',payload, {
             qos: 1,
             retain: true,
             properties: {

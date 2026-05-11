@@ -8,7 +8,7 @@ const client = mqtt.connect("mqtt://localhost", {
     },
 });
 
-const PATIENT_ID = "P-CRIT-01";
+const PATIENT_ID = "P-D663DFE7 ";
 const TOPIC = `er/${PATIENT_ID}/vitals`;
 const ALIAS_ID = 1;
 let isFirstPublish = true;
