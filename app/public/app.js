@@ -648,7 +648,7 @@ ws.addEventListener('message', (event) => {
             <div class="ml-auto text-xs font-semibold ${msg.retain ? 'text-primary-600' : 'text-slate-500'}">
                 ${msg.retain ? '[RETAINED FLAG]' : ''} Expiry: <span id="envExpiry">${msg.expiry || 'N/A'}</span>s
             </div>
-        `;
+    
         
         if (window.envInterval) clearInterval(window.envInterval);
         if (msg.expiry) {
