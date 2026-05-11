@@ -5,6 +5,7 @@ const { exec } = require('child_process');
 const express = require('express');
 const http = require('http');
 const WebSocket = require('ws');
+const mqtt = require('mqtt');
 const { log } = require('console');
 
 // Load proto
@@ -21,6 +22,7 @@ const triageProto = grpc.loadPackageDefinition(packageDefinition).triage;
 const patientsState = new Map();
 let triageQueue = [];
 const dashboardStreams = new Set();
+const mqttClient = mqtt.connect('mqtt://localhost', { protocolVersion: 5 , clientId: 'gateway_subsriber' });
 
 function createPatientId() {
     return `P-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
@@ -152,6 +154,65 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
     dashboardStream.on('data', (queueUpdate) => {
         wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
             client.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: JSON.parse(queueUpdate.raw_html_queue) })));
+    });
+    
+    mqttClient.on('connect', () => {
+        log('MQTT Gateway Connected. Subscribitn to telemetry streams...');
+        // $share/er_group enables load-balanced Shared Subscriptions. 
+        // er/+/vitals utilizes Single-Level Wildcard (+) to capture all patient IDs.
+        mqttClient.subscribe('$share/er_group/er/+/vitals', { qos: 1} , (err) => {
+            if (err) log('MQTT subscribe load-balancd subscription error:', err);
+        });
+        mqttClient.subscribe('er/admin/request', { qos: 1 }, (err) => {
+            if (err) log('MQTT subscribe admin subscription error:', err);
+        });
+        mqttClient.subscribe('er/+/env', { qos: 1 }, (err) => {
+            if (err) log('MQTT subscribe environment subscription error:', err);
+        });
+        mqttClient.subscribe('er/admin/status', { qos: 1 }, (err) => {
+            if (err) log('MQTT subscribe status subscription error:', err);
+        });
+    });
+
+    // Ingest MQTT payloads, parse parameters, and pipe directly into the gRPC VitalsStream.
+    mqttClient.on('message', (topic, message, packet) => {
+        if (topic === 'er/admin/status') {
+            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ADMIN', data: JSON.parse(message.toString()), retain: packet.retain })));
+            return;
+        }
+        if (topic.endsWith('/env')) {
+            const payload = JSON.parse(message.toString());
+            const metadata = packet.properties?.userProperties;
+            const expiry = packet.properties?.messageExpiryInterval;
+            wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ENV', data: payload, retain: packet.retain, expiry, metadata })));
+            return;
+        }
+        // Request-Response listener. Intercepts request, extracts correlation data, and publishes to the dynamic response topic.
+        if (topic === 'er/admin/request') {
+            const responseTopic = packet.properties?.responseTopic;
+            const correlationData = packet.properties?.correlationData;
+
+            if (responseTopic) {
+                const resPayload = JSON.stringify({ status: 'OK', active_patients: triageQueue.length });
+                mqttClient.publish(responseTopic, resPayload, {
+                    qos: 1,
+                    properties: { correlationData }
+                });
+            }
+            return;
+        }
+        const topicParts = topic.split('/');
+        if (topicParts.length === 3 && topicParts[2] === 'vitals') {
+            const patient_id = topicParts[1];
+            try {
+                const payload = JSON.parse(message.toString());
+                if (payload.bpm) {
+                    vitalsStream.write({ patient_id, bpm: payload.bpm });
+                }
+            } catch (err) {
+                log(`[SOC ALERT] Malformed MQTT payload intercepted on topic: ${topic}`);
+            }
+        }
     });
 
     wss.on('connection', (ws) => {
