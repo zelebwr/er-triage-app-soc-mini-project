@@ -424,6 +424,7 @@ ws.addEventListener('open', () => {
         }
     }, 100);
 });
+}
 
 ws.addEventListener('close', () => {
     wsStatus.innerHTML = `
@@ -670,7 +671,6 @@ ws.addEventListener('message', (event) => {
         }
     }
 });
-
 
 function scheduleReconnect() {
     if (reconnectAttempts < maxReconnectAttempts) {

@@ -158,24 +158,13 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
     const mqttClient = mqtt.connect('mqtt://localhost', { protocolVersion: 5, clientId: 'gateway_subscriber' });
     
     mqttClient.on('connect', () => {
-        log('MQTT Gateway Connected. Subscribitn to telemetry streams...');
-        // $share/er_group enables load-balanced Shared Subscriptions. 
-        // er/+/vitals utilizes Single-Level Wildcard (+) to capture all patient IDs.
-        mqttClient.subscribe('$share/er_group/er/+/vitals', { qos: 1} , (err) => {
-            if (err) log('MQTT subscribe load-balancd subscription error:', err);
-        });
-        mqttClient.subscribe('er/admin/request', { qos: 1 }, (err) => {
-            if (err) log('MQTT subscribe admin subscription error:', err);
-        });
-        mqttClient.subscribe('er/+/env', { qos: 1 }, (err) => {
-            if (err) log('MQTT subscribe environment subscription error:', err);
-        });
-        mqttClient.subscribe('er/admin/status', { qos: 1 }, (err) => {
-            if (err) log('MQTT subscribe status subscription error:', err);
-        });
+        log('MQTT Gateway Connected. Subscribing to telemetry streams...');
+        mqttClient.subscribe('$share/er_group/er/+/vitals', { qos: 1 });
+        mqttClient.subscribe('er/admin/request', { qos: 1 });
+        mqttClient.subscribe('er/+/env', { qos: 1 });
+        mqttClient.subscribe('er/admin/status', { qos: 1 });
     });
 
-    // Ingest MQTT payloads, parse parameters, and pipe directly into the gRPC VitalsStream.
     mqttClient.on('message', (topic, message, packet) => {
         if (topic === 'er/admin/status') {
             wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ADMIN', data: JSON.parse(message.toString()), retain: packet.retain })));
@@ -188,7 +177,6 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
             wss.clients.forEach(c => c.readyState === WebSocket.OPEN && c.send(JSON.stringify({ type: 'MQTT_ENV', data: payload, retain: packet.retain, expiry, metadata })));
             return;
         }
-        // Request-Response listener. Intercepts request, extracts correlation data, and publishes to the dynamic response topic.
         if (topic === 'er/admin/request') {
             const responseTopic = packet.properties?.responseTopic;
             const correlationData = packet.properties?.correlationData;
@@ -215,6 +203,8 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
             }
         }
     });
+
+
 
     wss.on('connection', (ws) => {
         ws.on('message', (message) => {
