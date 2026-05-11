@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+        "gateway": "node server.js",
+        "admin": "node mqtt/admin_control.js",
+        "env": "node mqtt/sensor_env.js",
+        "crit": "node mqtt/sensor_critical.js"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.14.3",

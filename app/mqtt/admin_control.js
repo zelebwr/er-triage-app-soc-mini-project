@@ -6,7 +6,7 @@ const client = mqtt.connect('mqtt://localhost', {
     clientId: 'admin_control_node',
     will: {
         topic: 'er/admin/status',
-        paylod: JSON.stringify({ status: 'OFFLINE', reason: 'Connection lost' }),
+        payload: JSON.stringify({ status: 'OFFLINE', reason: 'Connection lost' }),
         qos: 1,
         retain: true
     }
@@ -21,7 +21,7 @@ client.on('connect', () => {
 
     setInterval(() => {
         const correlationId = crypto.randomBytes(4).toString('hex'); 
-        const reqPayload = JSON.stringify({ comand: 'SYSTEM_DIAGNOSTIC' });
+        const reqPayload = JSON.stringify({ command: 'SYSTEM_DIAGNOSTIC' });
 
         client.publish('er/admin/request', reqPayload, {
             qos: 1,

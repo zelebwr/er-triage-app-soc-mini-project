@@ -8,14 +8,14 @@ const client = mqtt.connect("mqtt://localhost", {
     },
 });
 
-const PATIENT_ID = "P-D663DFE7 ";
+const PATIENT_ID = "P-D663DFE7";
 const TOPIC = `er/${PATIENT_ID}/vitals`;
 const ALIAS_ID = 1;
 let isFirstPublish = true;
 
 client.on("connect", () => {
     console.log(
-        `[Sensor Critical] Connected. Emitting telemetry for %{PATIENT_ID}`,
+        `[Sensor Critical] Connected. Emitting telemetry for ${PATIENT_ID}`,
     );
     setInterval(() => {
         const bpm = Math.floor(Math.random() * (130 - 40 + 1)) + 40; // Random BPM between 40 and 130

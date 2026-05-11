@@ -411,8 +411,8 @@ ws.addEventListener('open', () => {
             </div>
         </div>`;
     updateStats(queueData);
-    addlog('Antrian triage tersinkronisasi', 'info');
-    
+    addLog('Antrian triage tersinkronisasi', 'info');
+
     currentPage = 1;
     searchQuery = '';
     queueSearch.value = '';
@@ -637,10 +637,10 @@ ws.addEventListener('message', (event) => {
 
     } else if (msg.type === 'ERROR') {
         addLog(`Error: ${escapeHtml(msg.data)}`, 'error');
+        
     } else if (msg.type === ' MQTT_ADMIN') {
         const el = $('statEnv'); 
         let metaHtml = msg.metadata ? Object.entries(msg.metadata).map(([k,v]) => `<span class="bg-slate-100 border border-slate-200 px-2 py-0.5 rounded text-xs font-mono text-slate-600">${k}:${v}</span>`).join('') : '';
-        
         el.innerHTML = `
             <div class="bg-slate-50 px-3 py-1 rounded">Temp: <b>${msg.data.temp}°C</b></div>
             <div class="bg-slate-50 px-3 py-1 rounded">Hum: <b>${msg.data.humidity}%</b></div>

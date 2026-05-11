@@ -22,7 +22,6 @@ const triageProto = grpc.loadPackageDefinition(packageDefinition).triage;
 const patientsState = new Map();
 let triageQueue = [];
 const dashboardStreams = new Set();
-const mqttClient = mqtt.connect('mqtt://localhost', { protocolVersion: 5 , clientId: 'gateway_subsriber' });
 
 function createPatientId() {
     return `P-${crypto.randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase()}`;
@@ -155,6 +154,8 @@ grpcServer.bindAsync('0.0.0.0:50051', grpc.ServerCredentials.createInsecure(), (
         wss.clients.forEach(client => client.readyState === WebSocket.OPEN &&
             client.send(JSON.stringify({ type: 'QUEUE_UPDATE', data: JSON.parse(queueUpdate.raw_html_queue) })));
     });
+
+    const mqttClient = mqtt.connect('mqtt://localhost', { protocolVersion: 5, clientId: 'gateway_subscriber' });
     
     mqttClient.on('connect', () => {
         log('MQTT Gateway Connected. Subscribitn to telemetry streams...');
